@@ -1,0 +1,123 @@
+import streamlit as st
+import os
+from google import genai
+from google.genai import types
+
+# Page setup & branding
+st.set_page_config(
+    page_title="TINTA-AI | Campus Journalism Coach",
+    page_icon="📰",
+    layout="wide"
+)
+
+# Custom header
+st.markdown("""
+# 📰 TINTA-AI: Tool for Integrated Newsroom Training & Advising
+*Division Schools Press Conference (DSPC) 2026 — Teacher Category Innovation*
+""")
+st.caption("Ethical, human-in-the-loop AI coaching aligned with RA 7079 & DepEd Order No. 003, s. 2026.")
+
+# Sidebar Configuration
+with st.sidebar:
+    st.header("⚙️ Editorial Settings")
+    
+    # API Key Handling (Reads from Streamlit Secrets or manual input)
+    api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+    if not api_key:
+        api_key = st.text_input("Enter Gemini API Key:", type="password", help="Get a free key from Google AI Studio")
+    
+    section = st.selectbox(
+        "Journalism Section / Category:",
+        ["News Writing (Pagsulat ng Balita)", 
+         "Editorial Writing (Pangulong Tudling)", 
+         "Feature Writing (Lathalain)", 
+         "Sports Writing (Balitang Isports)", 
+         "Science & Technology (Pang-agham)"]
+    )
+    
+    language = st.radio("Language Medium:", ["English", "Filipino"])
+    user_role = st.radio("Current Mode:", ["Student Reporter", "School Paper Adviser (SPA)"])
+    
+    st.divider()
+    st.info("🔒 **Data Privacy Guarantee:** Learner Reference Numbers (LRNs) and private learner information are stripped prior to model execution.")
+
+# System Prompt Template with Strict Pedagogical Boundaries
+SYSTEM_PROMPT = f"""
+You are TINTA-AI, an expert Philippine Campus Journalism Coach and School Paper Adviser (SPA).
+You evaluate student draft submissions under Republic Act 7079 (Campus Journalism Act) and DepEd Order No. 003, s. 2026.
+
+RULES & BOUNDARIES:
+1. NEVER ghostwrite or rewrite the complete story. The student reporter must do the actual writing.
+2. Provide constructive, Socratic coaching questions and specific diagnostic flags.
+3. Category: {section}
+4. Language: {language}
+
+FORMAT YOUR RESPONSE IN 4 CLEAR SECTIONS:
+### 1. 🔍 Lead & Structure Diagnostics
+- Check if the 5 Ws and 1 H are present (for News/Sports) or evaluate the hook/peg (for Editorial/Feature).
+- Flag inverted pyramid adherence and paragraph pacing.
+
+### 2. ⚖️ Editorial & Ethics Checklist
+- Flag opinionated adjectives or bias in news articles.
+- Identify missing attribution, single-source vulnerabilities, or unverified claims.
+- Check for passive voice and AP/DepEd style conventions.
+
+### 3. 💡 Socratic Guiding Questions
+- Ask 2 to 3 thought-provoking questions pushing the student to dig deeper into the angle or verify sources.
+
+### 4. 📊 Formative Scorecard (Estimated NSPC Rubric Scale: 1-100)
+- Content & Peg: /30
+- Technical Style & Accuracy: /30
+- Structure & Readability: /25
+- Ethics & Attribution: /15
+- Total Estimated Score: /100
+"""
+
+# Main Application Layout
+col_input, col_output = st.columns([1, 1], gap="medium")
+
+with col_input:
+    st.subheader("📝 Article Submission Desk")
+    article_title = st.text_input("Draft Headline / Working Title:", placeholder="e.g., Alcantara NHS Clinches Division Robotics Championship")
+    interview_notes = st.text_area("Field Notes / Interview Quotes (Optional context):", height=100, placeholder="Paste factual data points, speaker designations, and quote snippets here...")
+    article_body = st.text_area("Draft Article Body:", height=300, placeholder="Paste your article draft here for coaching review...")
+    
+    analyze_btn = st.button("🚀 Run TINTA-AI Diagnostic", type="primary", use_container_width=True)
+
+with col_output:
+    st.subheader("📋 Adviser Feedback & Diagnostic")
+    
+    if analyze_btn:
+        if not api_key:
+            st.error("⚠️ Please provide a valid Gemini API Key in the sidebar to run diagnostics.")
+        elif not article_body.strip():
+            st.warning("⚠️ Please paste an article draft to evaluate.")
+        else:
+            with st.spinner("Analyzing editorial structure, fairness, and DepEd guidelines..."):
+                try:
+                    # Initialize client with official google-genai SDK
+                    client = genai.Client(api_key=api_key)
+                    
+                    user_content = f"""
+                    Headline: {article_title}
+                    Background Notes: {interview_notes}
+                    Article Draft:
+                    {article_body}
+                    """
+                    
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=user_content,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            temperature=0.3,
+                        ),
+                    )
+                    
+                    st.success("✅ Diagnostic Complete")
+                    st.markdown(response.text)
+                    
+                except Exception as e:
+                    st.error(f"Execution Error: {str(e)}")
+    else:
+        st.info("👈 Enter your draft on the left and click **Run TINTA-AI Diagnostic** to receive rubric scoring and structural recommendations.")
